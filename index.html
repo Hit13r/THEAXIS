@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Trash Classifier</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f4f8;
+            color: #333;
+            text-align: center;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #4CAF50;
+            margin-bottom: 20px;
+        }
+
+        button {
+            width: 165px;
+            height: 62px;
+            cursor: pointer;
+            color: #fff;
+            font-size: 17px;
+            border-radius: 1rem;
+            border: none;
+            position: relative;
+            background: #00ef4c;
+            transition: 0.1s;
+        }
+
+        button::after {
+            content: '';
+            width: 100%;
+            height: 100%;
+            background-image: radial-gradient( circle farthest-corner at 10% 20%,  rgb(87, 171, 255) 17.8%, rgb(159, 255, 135) 100.2% );
+            filter: blur(15px);
+            z-index: -1;
+            position: absolute;
+            left: 0;
+            top: 0;
+        }
+
+        button:active {
+            transform: scale(0.9) rotate(3deg);
+            background: radial-gradient( circle farthest-corner at 10% 20%,  rgb(137, 255, 105) 17.8%, rgb(241, 255, 89) 100.2% );
+            transition: 0.5s;
+        }
+
+
+        #webcam-container {
+            display: inline-block;
+            margin: 20px auto;
+            width: 200px;
+            height: 200px;
+            border: 5px solid #4CAF50;
+            border-radius: 10px;
+            overflow: hidden;
+            background-color: #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+        }
+
+        #webcam-container canvas {
+            display: none;
+        }
+
+        #label-container div {
+            font-size: 18px;
+            margin-top: 10px;
+        }
+
+                /* Progress Bar Section */
+        #progress-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .progress-circle {
+            width: 100px;
+            height: 100px;
+            margin: 10px;
+            position: relative;
+        }
+
+        .progress-circle svg {
+            transform: rotate(-90deg);
+            width: 100%;
+            height: 100%;
+        }
+
+        .circle-bg, .circle-progress {
+            fill: none;
+            stroke-width: 10;
+        }
+
+        .circle-bg {
+            stroke: #e0e0e0;
+        }
+
+        .circle-progress {
+            stroke: #4CAF50;
+            stroke-linecap: round;
+            transition: stroke-dasharray 0.3s;
+        }
+
+        .progress-icon {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 30px;
+        }
+
+        .progress-percentage {
+            position: absolute;
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        #mode-select {
+            font-size: 16px;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+
+        /* Timeout Page Styling */
+        #timeout-page {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.9);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #timeout-page h2 {
+            color: #00ef4c;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
+        /* Centered Warning Popup */
+        #warning {
+            display: none;
+            position: fixed;
+            left: 50%;
+            top: 87%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(255, 0, 0, 0.9);
+            padding: 20px;
+            color: white;
+            font-size: 24px;
+            border-radius: 10px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+
+<h1>AI Trash Classifier</h1>
+
+<!-- Mode Selection -->
+<label for="mode-select">Select Recycling Mode:</label>
+<select id="mode-select">
+    <option value="paper">Paper</option>
+    <option value="batteries">Batteries</option>
+    <option value="plasticbottles">Plastic Bottles</option>
+</select>
+<br>
+<button id="start-button1" type="button" onclick="showTimeoutPage()">Restart</button>
+<br>
+
+<div id="webcam-container">
+    <span id="placeholder-text">Webcam will appear here</span>
+</div>
+
+<div id="label-container"></div>
+<!-- Progress Bars Container -->
+<div id="progress-container">
+    <div class="progress-circle">
+        <svg viewBox="0 0 36 36">
+            <circle class="circle-bg" cx="18" cy="18" r="15"></circle>
+            <circle class="circle-progress" cx="18" cy="18" r="15" stroke-dasharray="0, 100"></circle>
+        </svg>
+        <img class="progress-icon" src="paper.png" alt="Paper Icon">
+        <div class="progress-percentage" style="transform: rotate(0deg);">0%</div>
+    </div>
+    <div class="progress-circle">
+        <svg viewBox="0 0 36 36">
+            <circle class="circle-bg" cx="18" cy="18" r="15"></circle>
+            <circle class="circle-progress" cx="18" cy="18" r="15" stroke-dasharray="0, 100"></circle>
+        </svg>
+        <img class="progress-icon" src="batteries.png" alt="Battery Icon">
+        <div class="progress-percentage" style="transform: rotate(0deg);">0%</div>
+    </div>
+    <div class="progress-circle">
+        <svg viewBox="0 0 36 36">
+            <circle class="circle-bg" cx="18" cy="18" r="15"></circle>
+            <circle class="circle-progress" cx="18" cy="18" r="15" stroke-dasharray="0, 100"></circle>
+        </svg>
+        <img class="progress-icon" src="plastic bottles.png" alt="Plastic Icon">
+        <div class="progress-percentage" style="transform: rotate(0deg);">0%</div>
+    </div>
+</div>
+
+<!-- Timeout Page -->
+<div id="timeout-page">
+    <h2>Session Timeout</h2>
+    <button id="start-button" type="button" onclick="startOrRestart()">Restart</button>
+</div>
+
+<!-- Centered Warning Popup -->
+<div id="warning">⚠️ Warning: Wrong item detected!</div>
+
+<!-- Warning Audio -->
+<audio id="warning-audio" src="beep-warning-6387.mp3"></audio>
+
+<script type="text/javascript">
+    const URL = "./resource/trashClassifierneu/";
+    let model, webcam, labelContainer, maxPredictions;
+    let allowedClass = "";
+    let warningTimeout = null;
+    let classifierTimeout = null;
+    let isRunning = false;
+    navigator.mediaDevices.getUserMedia({video: true})
+
+    async function initClassifier() {
+        // Hide the timeout page and display the webcam
+        document.getElementById("timeout-page").style.display = "none";
+        document.getElementById("start-button").style.display = "none";
+
+        const modelURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
+
+        const modeSelect = document.getElementById('mode-select');
+        allowedClass = modeSelect.options[modeSelect.selectedIndex].text.toLowerCase();
+
+        // Load the model and setup webcam
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+
+        webcam = new tmImage.Webcam(200, 200, true);
+        await webcam.setup({ facingMode: "user" }); // Use front camera
+        await webcam.play();
+        
+
+        document.getElementById("placeholder-text").style.display = "none";
+        webcam.canvas.style.display = "block";
+        document.getElementById("webcam-container").appendChild(webcam.canvas);
+
+        labelContainer = document.getElementById("label-container");
+        labelContainer.innerHTML = ''; // Clear previous labels
+        for (let i = 0; i < maxPredictions; i++) {
+            labelContainer.appendChild(document.createElement("div"));
+        }
+
+        isRunning = true;
+        window.requestAnimationFrame(loop);
+    }
+
+    async function loop() {
+        if (!isRunning) return;
+        webcam.update();
+        await predict();
+        window.requestAnimationFrame(loop);
+    }
+
+
+    async function predict() {
+        const prediction = await model.predict(webcam.canvas);
+        const progressCircles = document.querySelectorAll('.circle-progress');
+        const progressPercentages = document.querySelectorAll('.progress-percentage');
+
+        prediction.forEach((pred, index) => {
+            const percentage = (pred.probability * 100).toFixed(2);
+            const dashArray = `${(percentage / 100) * (2 * Math.PI * 15)}, 100`;
+            progressCircles[index].setAttribute("stroke-dasharray", dashArray);
+
+            // Position the percentage label
+            const angle = (percentage / 100) * 360;
+            const radians = (angle - 90) * (Math.PI / 180); // Adjust by 90 degrees
+            const x = 18 + 16 * Math.cos(radians); // 16 is radius + offset
+            const y = 18 + 16 * Math.sin(radians);
+            progressPercentages[index].style.transform = `translate(${x}px, ${y}px)`;
+            progressPercentages[index].textContent = `${percentage}%`;
+        });
+
+        const bestPrediction = prediction.reduce((best, current) => current.probability > best.probability ? current : best);
+        const detectedClass = bestPrediction.className.toLowerCase();
+        if (detectedClass !== allowedClass && bestPrediction.probability > 0.9) {
+            triggerWarning();
+        } else {
+            clearWarning();
+        }
+    }
+
+    function triggerWarning() {
+        const warningPopup = document.getElementById("warning");
+        const warningAudio = document.getElementById("warning-audio");
+
+        // Show the warning modal
+        warningPopup.style.display = "block";
+
+        // Play the warning audio (message saying "warning, wrong item")
+        warningAudio.play();
+
+        // Remove the warning after 5 seconds
+        if (warningTimeout) clearTimeout(warningTimeout);
+        warningTimeout = setTimeout(() => {
+            clearWarning();
+        }, 5000);
+    }
+
+    function clearWarning() {
+        const warningPopup = document.getElementById("warning");
+        warningPopup.style.display = "none";
+    }
+
+    function stopClassifier() {
+        isRunning = false;
+        if (webcam) webcam.stop();
+    }
+
+    function startOrRestart() {
+        // Stop any previous sessions
+        //stopClassifier();
+
+        // Start the classifier again
+        initClassifier();
+
+        // Set timeout for 1 minute to show the timeout page
+        if (classifierTimeout) clearTimeout(classifierTimeout);
+        classifierTimeout = setTimeout(showTimeoutPage, 20000);
+    }
+
+    function showTimeoutPage() {
+        stopClassifier();
+
+        // Clear the webcam container
+        const webcamContainer = document.getElementById("webcam-container");
+        const webcamCanvas = webcamContainer.querySelector("canvas");
+
+        if (webcamCanvas) {
+            webcamContainer.removeChild(webcamCanvas);
+        }
+
+        document.getElementById("placeholder-text").style.display = "block"; // Show placeholder text again
+        document.getElementById("timeout-page").style.display = "flex";
+        document.getElementById("start-button").style.display = "block"; // Show start button on timeout
+    }
+
+</script>
+
+</body>
+</html>
+
